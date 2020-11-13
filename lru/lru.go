@@ -1,16 +1,8 @@
 package lru
 
-import (
-	"unsafe"
-)
-
-//defined for fast find data in map
-type LruData interface {
-	HashCode() int64
-}
 type Lru struct {
 	//fast find data
-	loc      map[int64]unsafe.Pointer
+	loc      map[int64]*Node
 	listHead *Node
 	listTail *Node
 	//total capacity
@@ -19,21 +11,20 @@ type Lru struct {
 	curLength int
 }
 type Node struct {
-	data LruData
+	key  int64
+	data interface{}
 	pre  *Node
 	next *Node
 }
 
 func NewLru(capacity int) *Lru {
-	return &Lru{listHead: &Node{}, capacity: capacity, loc: make(map[int64]unsafe.Pointer)}
+	return &Lru{listHead: &Node{}, capacity: capacity, loc: make(map[int64]*Node)}
 }
-func (lru *Lru) Get(data LruData) (LruData, bool, error) {
-	hashCode := data.HashCode()
+func (lru *Lru) Get(key int64) (interface{}, bool) {
 	//if data exist, put it to first of list
-	if nodeAddressPointer, ok := lru.loc[hashCode]; ok {
-		node := (*Node)(nodeAddressPointer)
+	if node, ok := lru.loc[key]; ok {
 		if lru.curLength == 1 {
-			return node.data, false, nil
+			return node.data, false
 		}
 		if node.next != nil {
 			node.next.pre = node.pre
@@ -45,18 +36,24 @@ func (lru *Lru) Get(data LruData) (LruData, bool, error) {
 		node.pre = lru.listHead
 		lru.listHead.next = node
 		node.next.pre = node
-		return node.data, false, nil
+		return node.data, false
 	} else {
+		return nil, true
+	}
+
+}
+func (lru *Lru) Put(key int64, data interface{}) {
+	if _, ok := lru.loc[key]; !ok {
 		//add new node
 		//if queue is full, let last node out
-		node := &Node{data: data}
+		node := &Node{data: data, key: key}
 		node.next = lru.listHead.next
 		lru.listHead.next = node
 		node.pre = lru.listHead
 		if node.next != nil {
 			node.next.pre = node
 		}
-		lru.loc[data.HashCode()] = unsafe.Pointer(node)
+		lru.loc[key] = node
 		lru.curLength += 1
 		if lru.curLength == 1 {
 			lru.listTail = node
@@ -64,10 +61,9 @@ func (lru *Lru) Get(data LruData) (LruData, bool, error) {
 		if lru.curLength == lru.capacity+1 {
 			deleteNode := lru.listTail
 			lru.listTail = lru.listTail.pre
-			delete(lru.loc, deleteNode.data.HashCode())
+			delete(lru.loc, deleteNode.key)
 			deleteNode = nil
 			lru.curLength = lru.curLength - 1
 		}
-		return node.data, true, nil
 	}
 }
