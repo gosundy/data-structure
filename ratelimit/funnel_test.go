@@ -6,17 +6,17 @@ import (
 )
 
 func TestFunnel_Add(t *testing.T) {
-	rateLimit:=NewFunnel(100,10*time.Millisecond)
-	for i:=0;i<100;i++{
-		rateLimit.Add(i)
+	rateLimit := NewFunnel(1000, 1000)
+	for i := 0; i < 1000; i++ {
+		rateLimit.Add()
 	}
-	start:=time.Now()
+	start := time.Now()
 	for {
-		if rateLimit.current!=0{
+		if rateLimit.current != 0 {
 			rateLimit.Take()
-		}else{
+		} else {
 			break
 		}
 	}
-	t.Logf("cost:%d us, expect about: %d us",time.Now().Sub(start).Microseconds(),100*10*time.Millisecond/1000)
+	t.Logf("cost:%d us, expect about: %d us", time.Since(start).Microseconds(), time.Second/1000)
 }

@@ -12,13 +12,13 @@ type Funnel struct {
 	current  int64
 	leakRate time.Duration
 	lastTake time.Time
-	datas    []interface{}
 }
 
-func NewFunnel(maxCapacity int64, perDataDuration time.Duration) *Funnel {
-	return &Funnel{rwMutex: sync.RWMutex{}, capacity: maxCapacity, current: 0, leakRate: perDataDuration, lastTake: time.Now().Add(-perDataDuration), datas: make([]interface{}, maxCapacity)}
+func NewFunnel(maxCapacity int64, qps uint64) *Funnel {
+	leakRate := time.Second / time.Duration(qps)
+	return &Funnel{rwMutex: sync.RWMutex{}, capacity: maxCapacity, current: 0, leakRate: leakRate, lastTake: time.Now().Add(-leakRate)}
 }
-func (f *Funnel) Add(data interface{}) bool {
+func (f *Funnel) Add() bool {
 	if f.current == f.capacity {
 		return false
 	}
@@ -27,23 +27,22 @@ func (f *Funnel) Add(data interface{}) bool {
 	}
 	f.rwMutex.Lock()
 	defer f.rwMutex.Unlock()
-	f.datas[f.current] = data
 	f.current++
 	return true
 }
-func (f *Funnel) Take() (interface{}, bool) {
+func (f *Funnel) Take() bool {
 	if f.current == 0 {
-		return nil, false
+		return false
 	}
 	if f.current < 0 {
 		panic(fmt.Sprintf("funnel's current data count:%d less than 0", f.current))
 	}
 	if time.Now().Sub(f.lastTake).Microseconds()-f.leakRate.Microseconds() < 0 {
-		return nil, false
+		return false
 	}
 	f.rwMutex.Lock()
 	defer f.rwMutex.Unlock()
 	f.current--
 	f.lastTake = time.Now()
-	return f.datas[f.current], true
+	return true
 }
