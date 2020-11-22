@@ -12,7 +12,7 @@ import (
 )
 
 func TestJob(t *testing.T) {
-	job := NewJob(10, 100000)
+	job := NewJob(10)
 	res := int32(0)
 	count := 1000000
 	start := time.Now()
@@ -21,14 +21,14 @@ func TestJob(t *testing.T) {
 			time.Sleep(time.Duration(rand.Int31n(100)) * time.Millisecond)
 			atomic.AddInt32(&res, 1)
 			if res%int32(100) == 0 {
-				job.Scale(2)
+				job.Scale(2*job.QueueSize)
 			}
 			return nil
 		})
 	}
 	for {
 		if res == int32(count) {
-			fmt.Println(res, time.Since(start), job.CurrentQueueSize)
+			fmt.Println(res, time.Since(start), job.QueueSize)
 			return
 		} else {
 			mem := runtime.MemStats{}
@@ -42,15 +42,15 @@ func TestJob(t *testing.T) {
 func TestJobForCpuCompute(t *testing.T) {
 	count := 100
 	res := uint64(0)
-	workerCount := int32(runtime.NumCPU())
-	job := NewJob(workerCount, workerCount)
+	workerCount := runtime.NumCPU()
+	job := NewJob(workerCount)
 
 	wg := sync.WaitGroup{}
 	wg.Add(count)
 	computeTask := func(ctx context.Context) error {
 		defer wg.Done()
 		sum := uint64(0)
-		for i := 0; i < 1000000000; i++ {
+		for i := 0; i < 100000000; i++ {
 			sum += uint64(i)
 		}
 		atomic.AddUint64(&res, sum)
@@ -65,8 +65,8 @@ func TestJobForCpuCompute(t *testing.T) {
 }
 func TestJobForIOCompute(t *testing.T) {
 	count := 10000
-	workerCount := int32(runtime.NumCPU()) * 100
-	job := NewJob(workerCount, workerCount)
+	workerCount := runtime.NumCPU() * 100
+	job := NewJob(workerCount)
 
 	wg := sync.WaitGroup{}
 	wg.Add(count)
@@ -84,8 +84,8 @@ func TestJobForIOCompute(t *testing.T) {
 }
 func TestJobForIOComputeWithDeathLock(t *testing.T) {
 	count := runtime.NumCPU() + 1
-	workerCount := int32(runtime.NumCPU())
-	job := NewJob(workerCount, workerCount)
+	workerCount := runtime.NumCPU()
+	job := NewJob(workerCount)
 
 	wg := sync.WaitGroup{}
 	wg.Add(count)

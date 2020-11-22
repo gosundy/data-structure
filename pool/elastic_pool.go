@@ -3,32 +3,37 @@ package pool
 import (
 	"context"
 	"fmt"
-	"runtime"
+	"sync"
 	"sync/atomic"
 )
 
 type Job struct {
-	MaxQueueSize     int32
-	CurrentQueueSize int32
-	workerCh         chan *Worker
-	ctx              context.Context
-	cancel           context.CancelFunc
-	workerRunCount   int32
+	QueueSize      int
+	workerQueue    atomic.Value
+	ctx            context.Context
+	cancel         context.CancelFunc
+	workerRunCount int32
+	objectPool     sync.Pool
+	mu             sync.Mutex
 }
 type Worker struct {
 	job *Job
 }
 
-func NewJob(currentQueueSize int32, maxQueueSize int32) *Job {
+func NewJob(queueSize int) *Job {
 	job := &Job{}
-	job.MaxQueueSize = maxQueueSize
+	job.QueueSize = queueSize
 	job.ctx, job.cancel = context.WithCancel(context.Background())
-	job.CurrentQueueSize = currentQueueSize
-	workerCh := make(chan *Worker, job.MaxQueueSize)
-	for i := int32(0); i < job.MaxQueueSize; i++ {
+	workerCh := make(chan *Worker, job.QueueSize)
+	pool := sync.Pool{}
+	pool.New = func() interface{} {
+		return &Worker{job: job}
+	}
+	job.objectPool = pool
+	for i := 0; i < job.QueueSize; i++ {
 		workerCh <- &Worker{job: job}
 	}
-	job.workerCh = workerCh
+	job.workerQueue.Store(workerCh)
 	return job
 }
 func (job *Job) Dispatch(task func(ctx context.Context) error) {
@@ -37,35 +42,45 @@ func (job *Job) Dispatch(task func(ctx context.Context) error) {
 	worker.Do(job.ctx, task)
 }
 func (job *Job) AddWorker(worker *Worker) {
-	job.workerCh <- worker
+	workerQueue := job.workerQueue.Load().(chan *Worker)
+	select {
+	case workerQueue <- worker:
+	default:
+		job.objectPool.Put(worker)
+	}
 }
 func (job *Job) TakeWorker() *Worker {
-	for {
-		cur := atomic.LoadInt32(&job.CurrentQueueSize)
-		curWorker := atomic.LoadInt32(&job.workerRunCount)
-		if curWorker > cur {
-			runtime.Gosched()
-			continue
-		}
-		worker := <-job.workerCh
-		return worker
+	workerQueue := job.workerQueue.Load().(chan *Worker)
+	worker := <-workerQueue
+	return worker
+}
+func (job *Job) Scale(queueSize int) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	scaleSize := queueSize
+	if scaleSize < job.QueueSize {
+		return
+	}
+	delta := scaleSize - job.QueueSize
+	workQueue := make(chan *Worker, scaleSize)
+	for i := 0; i < delta; i++ {
+		worker := job.objectPool.Get().(*Worker)
+		workQueue <- worker
+	}
+	job.QueueSize = scaleSize
+	job.workerQueue.Store(workQueue)
+}
+func (job *Job) DeScale(queueSize int) {
+	job.mu.Lock()
+	defer job.mu.Unlock()
+	scaleSize := queueSize
+	if scaleSize > job.QueueSize {
+		return
 	}
 
-}
-func (job *Job) Scale(ratio int32) {
-	scaleSize := job.CurrentQueueSize * ratio
-	if scaleSize > job.MaxQueueSize {
-		scaleSize = job.MaxQueueSize
-	}
-
-	job.CurrentQueueSize = scaleSize
-}
-func (job *Job) DeScale(ratio int32) {
-	scaleSize := job.CurrentQueueSize / ratio
-	if scaleSize == 0 {
-		scaleSize = 1
-	}
-	job.CurrentQueueSize = scaleSize
+	workQueue := make(chan *Worker, scaleSize)
+	job.QueueSize = scaleSize
+	job.workerQueue.Store(workQueue)
 
 }
 func (w *Worker) Do(ctx context.Context, task func(ctx context.Context) error) {
