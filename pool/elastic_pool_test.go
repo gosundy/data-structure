@@ -42,17 +42,17 @@ func TestJob(t *testing.T) {
 
 }
 func TestJobForCpuCompute(t *testing.T) {
-	count := 2000
+	count := 2
 	res := uint64(0)
 	workerCount := runtime.NumCPU()
-	pool := NewPool(workerCount, time.Second*10)
+	pool := NewPool(workerCount, time.Second)
 
 	wg := sync.WaitGroup{}
 	wg.Add(count)
 	computeTask := func(ctx context.Context) {
 		defer wg.Done()
 		sum := uint64(0)
-		for i := 0; i < 100000000; i++ {
+		for i := 0; i < 10000000; i++ {
 			sum += uint64(i)
 		}
 		atomic.AddUint64(&res, sum)
@@ -70,26 +70,30 @@ func TestJobForCpuCompute(t *testing.T) {
 	t.Log(res)
 }
 func TestJobForIOCompute(t *testing.T) {
-	count := 50000000
-	workerCount := runtime.NumCPU()*60000
-	pool := NewPool(workerCount, time.Second*10)
+	count := 5000000
+	workerCount := runtime.NumCPU() * 50000
+	pool := NewPool(workerCount, time.Second)
 
 	wg := sync.WaitGroup{}
 	wg.Add(count)
 	computeTask := func(ctx context.Context) {
 		defer wg.Done()
 		time.Sleep(time.Duration(rand.Int31n(100)) * time.Millisecond)
+		//time.Sleep(10 * time.Millisecond)
 	}
 	go func() {
 		for {
-			fmt.Println(pool.workerRunCount,len(pool.taskQueue))
+			fmt.Println(atomic.LoadInt64(&pool.workerRunCount), len(pool.taskQueue))
 			time.Sleep(time.Second)
 		}
 	}()
+	go func() {
+		for i := 0; i < count; i++ {
+			pool.Dispatch(computeTask)
+		}
+	}()
 	defer pool.Close()
-	for i := 0; i < count; i++ {
-		pool.Dispatch(computeTask)
-	}
+
 	wg.Wait()
 }
 func TestJobForIOComputeWithDeathLock(t *testing.T) {

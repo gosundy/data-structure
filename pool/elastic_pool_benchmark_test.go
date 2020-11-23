@@ -24,6 +24,7 @@ package pool
 
 import (
 	"context"
+	"math/rand"
 	"runtime"
 	"sync"
 	"testing"
@@ -31,14 +32,14 @@ import (
 )
 
 const (
-	RunTimes           = 10000000
-	BenchParam         = 10
+	RunTimes           = 1000000
+	BenchParam         = 100
 	BenchAntsSize      = 200000
-	DefaultExpiredTime = 10 * time.Second
+	DefaultExpiredTime = 400 * time.Millisecond
 )
 
-func demoFunc(ctx context.Context)  {
-	time.Sleep(time.Duration(BenchParam) * time.Millisecond)
+func demoFunc(ctx context.Context) {
+	time.Sleep(time.Duration(rand.Int31n(BenchParam)) * time.Millisecond)
 }
 
 func demoPoolFunc(args interface{}) {
@@ -96,7 +97,7 @@ func BenchmarkSemaphore(b *testing.B) {
 
 func BenchmarkAntsPool(b *testing.B) {
 	var wg sync.WaitGroup
-	p := NewPool(BenchAntsSize,DefaultExpiredTime)
+	p := NewPool(BenchAntsSize, DefaultExpiredTime)
 	defer p.Close()
 
 	b.StartTimer()
@@ -110,7 +111,7 @@ func BenchmarkAntsPool(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		wg.Add(RunTimes)
 		for j := 0; j < RunTimes; j++ {
-			p.Dispatch(func(ctx context.Context)  {
+			p.Dispatch(func(ctx context.Context) {
 				demoFunc(ctx)
 				wg.Done()
 			})
@@ -142,7 +143,7 @@ func BenchmarkSemaphoreThroughput(b *testing.B) {
 }
 
 func BenchmarkAntsPoolThroughput(b *testing.B) {
-	p := NewPool(BenchAntsSize,DefaultExpiredTime)
+	p := NewPool(BenchAntsSize, DefaultExpiredTime)
 	defer p.Close()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
