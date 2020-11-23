@@ -2,46 +2,87 @@ package pool
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
-type Job struct {
+type Pool struct {
 	QueueSize      int
 	workerQueue    atomic.Value
 	ctx            context.Context
 	cancel         context.CancelFunc
 	workerRunCount int32
-	objectPool     sync.Pool
+	objectPool     *sync.Pool
 	mu             sync.Mutex
+	taskQueue      chan func(ctx context.Context)
+	expireTime     time.Duration
+	submitQueue    chan func(ctx context.Context)
+	once           sync.Once
 }
 type Worker struct {
-	job *Job
+	pool *Pool
 }
 
-func NewJob(queueSize int) *Job {
-	job := &Job{}
-	job.QueueSize = queueSize
-	job.ctx, job.cancel = context.WithCancel(context.Background())
-	workerCh := make(chan *Worker, job.QueueSize)
-	pool := sync.Pool{}
-	pool.New = func() interface{} {
-		return &Worker{job: job}
+func NewPool(queueSize int, expireTime time.Duration) *Pool {
+	pool := &Pool{}
+	pool.QueueSize = queueSize
+	pool.ctx, pool.cancel = context.WithCancel(context.Background())
+	workerCh := make(chan *Worker, pool.QueueSize)
+	_pool := sync.Pool{}
+	_pool.New = func() interface{} {
+		return &Worker{pool: pool}
 	}
-	job.objectPool = pool
-	for i := 0; i < job.QueueSize; i++ {
-		workerCh <- &Worker{job: job}
+	pool.objectPool = &_pool
+	for i := 0; i < pool.QueueSize; i++ {
+		workerCh <- &Worker{pool: pool}
 	}
-	job.workerQueue.Store(workerCh)
-	return job
+	pool.submitQueue = make(chan func(ctx context.Context), queueSize/3)
+	pool.workerQueue.Store(workerCh)
+	pool.expireTime = expireTime
+	pool.taskQueue = make(chan func(ctx context.Context), queueSize*2)
+	return pool
 }
-func (job *Job) Dispatch(task func(ctx context.Context) error) {
-	worker := job.TakeWorker()
-	atomic.AddInt32(&job.workerRunCount, 1)
-	worker.Do(job.ctx, task)
+func (pool *Pool) Dispatch(task func(ctx context.Context)) {
+	pool.once.Do(
+		func() {
+			for i := 0; i < 3; i++ {
+				go func() {
+					for {
+					gettask:
+						_task := <-pool.submitQueue
+						for {
+							if pool.workerRunCount == 0 {
+								worker := pool.TakeWorker()
+								if worker != nil {
+									atomic.AddInt32(&pool.workerRunCount, 1)
+									worker.Do(pool.ctx)
+								}
+							}
+							select {
+							case pool.taskQueue <- _task:
+								goto gettask
+							default:
+							}
+							if pool.workerRunCount == int32(pool.QueueSize) {
+								continue
+							}
+							worker := pool.TakeWorker()
+							if worker != nil {
+								atomic.AddInt32(&pool.workerRunCount, 1)
+								worker.Do(pool.ctx)
+							}
+						}
+					}
+				}()
+			}
+
+		})
+
+	pool.submitQueue <- task
+
 }
-func (job *Job) AddWorker(worker *Worker) {
+func (job *Pool) AddWorker(worker *Worker) {
 	workerQueue := job.workerQueue.Load().(chan *Worker)
 	select {
 	case workerQueue <- worker:
@@ -49,47 +90,55 @@ func (job *Job) AddWorker(worker *Worker) {
 		job.objectPool.Put(worker)
 	}
 }
-func (job *Job) TakeWorker() *Worker {
+func (job *Pool) TakeWorker() *Worker {
 	workerQueue := job.workerQueue.Load().(chan *Worker)
-	worker := <-workerQueue
-	return worker
+	select {
+	case worker := <-workerQueue:
+		return worker
+	default:
+		return nil
+	}
 }
-func (job *Job) Scale(queueSize int) {
+func (job *Pool) Scale(queueSize int) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
 	scaleSize := queueSize
-	if scaleSize < job.QueueSize {
-		return
-	}
 	delta := scaleSize - job.QueueSize
-	workQueue := make(chan *Worker, scaleSize)
-	for i := 0; i < delta; i++ {
-		worker := job.objectPool.Get().(*Worker)
-		workQueue <- worker
+	if scaleSize <= 0 {
+		scaleSize = 1
 	}
-	job.QueueSize = scaleSize
-	job.workerQueue.Store(workQueue)
-}
-func (job *Job) DeScale(queueSize int) {
-	job.mu.Lock()
-	defer job.mu.Unlock()
-	scaleSize := queueSize
-	if scaleSize > job.QueueSize {
-		return
-	}
-
 	workQueue := make(chan *Worker, scaleSize)
-	job.QueueSize = scaleSize
-	job.workerQueue.Store(workQueue)
-
-}
-func (w *Worker) Do(ctx context.Context, task func(ctx context.Context) error) {
-	go func() {
-		defer atomic.AddInt32(&w.job.workerRunCount, -1)
-		err := task(ctx)
-		if err != nil {
-			fmt.Printf("%v", err)
+	if delta > 0 {
+		for i := 0; i < delta; i++ {
+			worker := job.objectPool.Get().(*Worker)
+			workQueue <- worker
 		}
-		w.job.AddWorker(w)
+	}
+
+	job.QueueSize = scaleSize
+	job.workerQueue.Store(workQueue)
+}
+
+func (w *Worker) Do(ctx context.Context) {
+	go func() {
+		timer := time.NewTimer(w.pool.expireTime)
+		timer.Stop()
+		for {
+			select {
+			case task := <-w.pool.taskQueue:
+				//timer.Stop()
+				task(ctx)
+				//timer.Reset(w.pool.expireTime)
+			case <-timer.C:
+				atomic.AddInt32(&w.pool.workerRunCount, -1)
+				w.pool.AddWorker(w)
+			case <-ctx.Done():
+				atomic.AddInt32(&w.pool.workerRunCount, -1)
+				return
+			}
+		}
 	}()
+}
+func (pool *Pool) Close() {
+	pool.cancel()
 }
