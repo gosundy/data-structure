@@ -2,6 +2,7 @@ package pool
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,6 +18,7 @@ type Pool struct {
 	mu             sync.Mutex
 	taskQueue      chan func(ctx context.Context)
 	expireTime     time.Duration
+	limitRate      int32
 }
 type Worker struct {
 	pool *Pool
@@ -41,8 +43,10 @@ func NewPool(queueSize int, expireTime time.Duration) *Pool {
 	return pool
 }
 func (pool *Pool) Dispatch(task func(ctx context.Context)) {
-
 	for {
+		if pool.limitRate >= 1 {
+			runtime.Gosched()
+		}
 		//cold  start
 		if pool.workerRunCount == 0 {
 			worker := pool.TakeWorker()
@@ -82,20 +86,18 @@ func (job *Pool) TakeWorker() *Worker {
 		return nil
 	}
 }
-func (job *Pool) Scale(queueSize int) {
+func (job *Pool) Scale(scaleSize int) {
 	job.mu.Lock()
 	defer job.mu.Unlock()
-	scaleSize := queueSize
 	delta := scaleSize - job.QueueSize
-	if scaleSize <= 0 {
-		scaleSize = 1
+	if delta <= 0 {
+		return
 	}
 	workQueue := make(chan *Worker, scaleSize)
-	if delta > 0 {
-		for i := 0; i < delta; i++ {
-			worker := job.objectPool.Get().(*Worker)
-			workQueue <- worker
-		}
+
+	for i := 0; i < delta; i++ {
+		worker := job.objectPool.Get().(*Worker)
+		workQueue <- worker
 	}
 
 	job.QueueSize = scaleSize
@@ -124,4 +126,30 @@ func (w *Worker) Do(ctx context.Context) {
 }
 func (pool *Pool) Close() {
 	pool.cancel()
+}
+func (pool *Pool) Probe() {
+	timer := time.NewTimer(time.Second * 2)
+	go func() {
+		for {
+			select {
+			case <-timer.C:
+				startTime := time.Now()
+				probe := make(chan struct{})
+				pool.Dispatch(func(ctx context.Context) {
+					probe <- struct{}{}
+				})
+				<-probe
+				timer.Reset(time.Second * 2)
+				if time.Since(startTime).Seconds() > 1 {
+					pool.limitRate = 1
+				} else {
+					pool.limitRate = 0
+				}
+			case <-pool.ctx.Done():
+				return
+			}
+		}
+
+	}()
+
 }

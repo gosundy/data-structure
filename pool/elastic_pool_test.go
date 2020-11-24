@@ -23,9 +23,9 @@ func TestJob(t *testing.T) {
 			//if res%int32(10000) == 0 {
 			//	pool.Scale(2*pool.QueueSize)
 			//}
-			if res%int32(20000) == 0 {
-				pool.Scale(pool.QueueSize / 2)
-			}
+			//if res%int32(20000) == 0 {
+			//	pool.Scale(pool.QueueSize / 2)
+			//}
 		})
 	}
 	for {
@@ -71,7 +71,7 @@ func TestJobForCpuCompute(t *testing.T) {
 }
 func TestJobForIOCompute(t *testing.T) {
 	count := 5000000
-	workerCount := runtime.NumCPU() * 50000
+	workerCount := runtime.NumCPU()*40000
 	pool := NewPool(workerCount, time.Second)
 
 	wg := sync.WaitGroup{}
@@ -83,10 +83,19 @@ func TestJobForIOCompute(t *testing.T) {
 	}
 	go func() {
 		for {
+			//if pool.workerRunCount == int64(pool.QueueSize) {
+			//	if pool.workerRunCount > 10000 {
+			//		pool.Scale(int(pool.workerRunCount + 1000))
+			//	} else {
+			//		pool.Scale(int(pool.workerRunCount * 2))
+			//	}
+			//
+			//}
 			fmt.Println(atomic.LoadInt64(&pool.workerRunCount), len(pool.taskQueue))
 			time.Sleep(time.Second)
 		}
 	}()
+	pool.Probe()
 	go func() {
 		for i := 0; i < count; i++ {
 			pool.Dispatch(computeTask)
