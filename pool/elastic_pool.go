@@ -2,7 +2,6 @@ package pool
 
 import (
 	"context"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -44,9 +43,6 @@ func NewPool(queueSize int, expireTime time.Duration) *Pool {
 }
 func (pool *Pool) Dispatch(task func(ctx context.Context)) {
 	for {
-		if pool.limitRate >= 1 {
-			runtime.Gosched()
-		}
 		//cold  start
 		if pool.workerRunCount == 0 {
 			worker := pool.TakeWorker()
@@ -106,21 +102,11 @@ func (job *Pool) Scale(scaleSize int) {
 
 func (w *Worker) Do(ctx context.Context) {
 	go func() {
-		timer := time.NewTimer(w.pool.expireTime)
-		for {
-			select {
-			case task := <-w.pool.taskQueue:
-				task(ctx)
-				timer.Reset(w.pool.expireTime)
-			case <-timer.C:
-				atomic.AddInt64(&w.pool.workerRunCount, -1)
-				w.pool.AddWorker(w)
-				return
-			case <-ctx.Done():
-				atomic.AddInt64(&w.pool.workerRunCount, -1)
-				w.pool.AddWorker(w)
+		for task := range w.pool.taskQueue {
+			if task == nil {
 				return
 			}
+			task(ctx)
 		}
 	}()
 }

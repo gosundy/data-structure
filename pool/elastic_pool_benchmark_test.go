@@ -24,7 +24,6 @@ package pool
 
 import (
 	"context"
-	"math/rand"
 	"runtime"
 	"sync"
 	"testing"
@@ -33,13 +32,13 @@ import (
 
 const (
 	RunTimes           = 1000000
-	BenchParam         = 100
+	BenchParam         = 10
 	BenchAntsSize      = 200000
-	DefaultExpiredTime = 400 * time.Millisecond
+	DefaultExpiredTime = 1000 * time.Millisecond
 )
 
 func demoFunc(ctx context.Context) {
-	time.Sleep(time.Duration(rand.Int31n(BenchParam)) * time.Millisecond)
+	time.Sleep(BenchParam * time.Millisecond)
 }
 
 func demoPoolFunc(args interface{}) {
