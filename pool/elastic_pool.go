@@ -21,6 +21,8 @@ type Pool struct {
 }
 type Worker struct {
 	pool *Pool
+	task chan func()
+	expireTime int64
 }
 
 func NewPool(queueSize int, expireTime time.Duration) *Pool {
