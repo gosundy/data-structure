@@ -23,11 +23,11 @@ func TestAVLTree(t *testing.T) {
 func TestAVLTree_Put01(t *testing.T) {
 	t.Log("LL")
 	tree := NewAvlTree()
-	count:=int(math.Exp2(8))-1
+	count := int(math.Exp2(8)) - 1
 	for i := 0; i < count; i++ {
 		tree.Put(i)
 	}
-	generateGraphPic(tree)
+	generateGraphPic(tree, "tmp.png")
 }
 func TestAVLTree_Put02(t *testing.T) {
 	t.Log("RR")
@@ -35,13 +35,13 @@ func TestAVLTree_Put02(t *testing.T) {
 	for i := 100; i > 0; i-- {
 		tree.Put(i)
 	}
-	generateGraphPic(tree)
+	generateGraphPic(tree, "tmp.png")
 }
 func TestAVLTree_Put03(t *testing.T) {
 	t.Log("RAND")
 	tree := NewAvlTree()
 	//datas:=[]int{12,4,2,13,10,0,3,11,7,5,15,1,9,14,6}
-	datas:=[]int{12,4,2,13,10,0,3,11,7,5,15,1,9,14,6}
+	datas := []int{12, 4, 2, 13, 10, 0, 3, 11, 7, 5, 15, 1, 9, 14, 6}
 	count := len(datas)
 	//datas := rand.Perm(count)
 	for i := 0; i < count; i++ {
@@ -52,7 +52,7 @@ func TestAVLTree_Put03(t *testing.T) {
 		tree.Put(datas[i])
 	}
 	t.Log(datas)
-	generateGraphPic(tree)
+	generateGraphPic(tree, "tmp.png")
 }
 func TestAVLTree_Put04(t *testing.T) {
 	t.Log("RAND")
@@ -70,9 +70,56 @@ func TestAVLTree_Put04(t *testing.T) {
 		tree.Put(datas[i])
 	}
 	t.Log(datas)
-	generateGraphPic(tree)
+	generateGraphPic(tree, "tmp.png")
 }
-func generateGraphPic(tree *AVLTree) {
+func TestAVLTree_Del01(t *testing.T) {
+	t.Log("RAND")
+	tree := NewAvlTree()
+	datas := []int{1, 2, 3, 4, 5}
+	count := len(datas)
+	for i := 0; i < count; i++ {
+
+		//if i==15{
+		//	tree.Put(datas[i])
+		//}
+		tree.Put(datas[i])
+	}
+	t.Log(datas)
+	generateGraphPic(tree, "tmp1.png")
+	tree.del(nil, PositionInit, tree.root, 1)
+	generateGraphPic(tree, "tmp2.png")
+	tree.del(nil, PositionInit, tree.root, 2)
+	generateGraphPic(tree, "tmp3.png")
+	tree.del(nil, PositionInit, tree.root, 3)
+	generateGraphPic(tree, "tmp4.png")
+	tree.del(nil, PositionInit, tree.root, 4)
+	generateGraphPic(tree, "tmp5.png")
+	tree.del(nil, PositionInit, tree.root, 5)
+	generateGraphPic(tree, "tmp6.png")
+}
+func TestAVLTree_Del02(t *testing.T) {
+	t.Log("RAND")
+	tree := NewAvlTree()
+	datas := rand.Perm(10)
+	count := len(datas)
+	for i := 0; i < count; i++ {
+		tree.Put(datas[i])
+	}
+	generateGraphPic(tree, "tmp.png")
+	t.Log(datas)
+	for i := 0; i < count; i++ {
+		k:=rand.Intn(10)
+		t.Log(k)
+		if k==5{
+			tree.del(nil, PositionInit, tree.root, k)
+		}else{
+			tree.del(nil, PositionInit, tree.root, k)
+		}
+
+		generateGraphPic(tree, fmt.Sprintf("tmp%d.png",i))
+	}
+}
+func generateGraphPic(tree *AVLTree, picName string) {
 	graphAst, _ := gographviz.ParseString(`digraph G {}`)
 	graph := gographviz.NewGraph()
 	if err := gographviz.Analyse(graphAst, graph); err != nil {
@@ -83,8 +130,8 @@ func generateGraphPic(tree *AVLTree) {
 	ioutil.WriteFile("tmp.gv", []byte(graph.String()), 0666)
 
 	// 产生图片
-	system("dot tmp.gv -T png -o tmp.png")
-	system("open tmp.png")
+	system(fmt.Sprintf("dot tmp.gv -T png -o %s", picName))
+	system(fmt.Sprintf("open %s", picName))
 }
 func generateGraphPicVLR(root *AVLNode, graph *gographviz.Graph) {
 	if root == nil {
