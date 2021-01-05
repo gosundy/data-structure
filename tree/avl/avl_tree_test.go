@@ -54,6 +54,7 @@ func TestAVLTree_Put03(t *testing.T) {
 	t.Log(datas)
 	generateGraphPic(tree, "tmp.png")
 }
+
 func TestAVLTree_Put04(t *testing.T) {
 	t.Log("RAND")
 	tree := NewAvlTree()
@@ -110,7 +111,28 @@ func TestAVLTree_Del02(t *testing.T) {
 	for i := 0; i < count; i++ {
 		k:=rand.Intn(10)
 		t.Log(k)
-		if k==5{
+		if k==9{
+			tree.del(nil, PositionInit, tree.root, k)
+		}else{
+			tree.del(nil, PositionInit, tree.root, k)
+		}
+		generateGraphPic(tree, fmt.Sprintf("tmp%d.png",i))
+	}
+}
+func TestAVLTree_Del03(t *testing.T) {
+	t.Log("RAND")
+	tree := NewAvlTree()
+	datas := rand.Perm(20)
+	count := len(datas)
+	for i := 0; i < count; i++ {
+		tree.Put(datas[i])
+	}
+	generateGraphPic(tree, "tmp.png")
+	t.Log(datas)
+	for i := 0; i < count; i++ {
+		k:=rand.Intn(20)
+		t.Log(k)
+		if k==10{
 			tree.del(nil, PositionInit, tree.root, k)
 		}else{
 			tree.del(nil, PositionInit, tree.root, k)

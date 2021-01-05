@@ -31,26 +31,26 @@ func (tree *AVLTree) Put(data int) {
 	}
 	tree.insert(nil, PositionInit, tree.root, data)
 }
-func (tree *AVLTree) del(curRootParent *AVLNode, curRootPosition int, curRoot *AVLNode, data int) (isChange bool) {
+func (tree *AVLTree) del(curRootParent *AVLNode, curRootPosition int, curRoot *AVLNode, data int) {
 	if curRoot == nil {
-		return false
+		return
 	}
 	if curRoot.data == data {
 		//如果curRoot是叶子节点
 		if curRoot.left == nil && curRoot.right == nil {
 			if curRootParent == nil {
 				tree.root = nil
-				return false
+				return
 			}
 			if curRootPosition == PositionLeft {
 				curRootParent.left = nil
-				curRootParent.leftHight -= 1
+				curRootParent.leftHight = 0
 			} else {
 				curRootParent.right = nil
-				curRootParent.righHight -= 1
+				curRootParent.righHight = 0
 			}
 		} else if curRoot.leftHight > curRoot.righHight {
-			isReplaced := tree.replaceRight(curRoot, curRoot.left, curRoot.left.right)
+			isReplaced := tree.replaceLeft(curRoot, curRoot.left, curRoot.left.right)
 			if !isReplaced {
 				curRoot.data = curRoot.left.data
 				curRoot.left = nil
@@ -63,218 +63,210 @@ func (tree *AVLTree) del(curRootParent *AVLNode, curRootPosition int, curRoot *A
 				curRoot.right = nil
 				curRoot.righHight = 0
 			}
-
 		}
-		return true
 	} else {
 		if data < curRoot.data {
-			isChange = tree.del(curRoot, PositionLeft, curRoot.left, data)
+			tree.del(curRoot, PositionLeft, curRoot.left, data)
 			if curRoot.left != nil {
 				curRoot.leftHight = max(curRoot.left.leftHight, curRoot.left.righHight) + 1
 			}
 
-			if !isChange {
-				return isChange
-			}
-			if abs(curRoot.leftHight, curRoot.righHight) >= 2 {
-				if curRoot.right.righHight > curRoot.right.leftHight {
-					// A
-					//    B
-					//       C
-					A := curRoot
-					B := curRoot.right
-					//C := curRoot.right.right
-
-					//step1:将B节点作为中心节点，放到A的位置
-					if curRootParent == nil {
-						tree.root = B
-					} else {
-						if curRootPosition == PositionLeft {
-							curRootParent.left = B
-						} else {
-							curRootParent.right = B
-						}
-					}
-					//step2:将A的右孩子作为B的左孩子，B的左孩子作为A的右孩子
-					A.right = B.left
-					B.left = A
-					//step3:调整各自的leftHeight和rightHeight
-					if A.right != nil {
-						A.righHight = max(A.right.leftHight, A.right.righHight) + 1
-					} else {
-						A.righHight = 0
-					}
-
-					B.leftHight = max(B.left.leftHight, B.left.righHight) + 1
-					if curRootParent != nil {
-						if curRootPosition == PositionLeft {
-							curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
-						} else {
-							curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
-						}
-					}
-					return false
-				} else {
-					//RL
-
-					//  A
-					//     B
-					//  C
-					A := curRoot
-					B := curRoot.right
-					C := curRoot.right.left
-					//step1:将C放到A的位置
-					if curRootParent == nil {
-						tree.root = C
-					} else {
-						if curRootPosition == PositionLeft {
-							curRootParent.left = C
-						} else {
-							curRootParent.right = C
-						}
-					}
-					//step2:将A的right指向C的left
-					A.right = C.left
-					//step3:将B的left指向C的right
-					B.left = C.right
-					//step4:将A作为C的左孩子，B作为C的右孩子
-					C.left = A
-					C.right = B
-					//step5:调整相关节点的高度
-					if A.right != nil {
-						A.righHight = max(A.right.leftHight, A.right.righHight) + 1
-					} else {
-						A.righHight = 0
-					}
-					if B.left != nil {
-						B.leftHight = max(B.left.leftHight, B.left.righHight) + 1
-					} else {
-						B.leftHight = 0
-					}
-					C.leftHight = max(C.left.leftHight, C.left.righHight) + 1
-					C.righHight = max(C.right.leftHight, C.right.righHight) + 1
-					if curRootParent != nil {
-						if curRootPosition == PositionLeft {
-							curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
-						} else {
-							curRootParent.righHight = max(curRootParent.leftHight, curRootParent.righHight) + 1
-						}
-					}
-				}
-				return false
-			}
-			return isChange
 		} else {
-			isChange = tree.del(curRoot, PositionRight, curRoot.right, data)
+			tree.del(curRoot, PositionRight, curRoot.right, data)
 			if curRoot.right != nil {
 				curRoot.righHight = max(curRoot.right.leftHight, curRoot.right.righHight) + 1
 			}
-			if !isChange {
-				return isChange
-			}
-			//curRoot.righHight += 1
-			//check and shift
-			if abs(curRoot.leftHight, curRoot.righHight) >= 2 {
-				if curRoot.left.leftHight > curRoot.left.righHight {
-					//LL
-					//      A
-					//    B
-					//  C
-					A := curRoot
-					B := curRoot.left
-					//	C:=curRoot.left.left
-
-					//setp1:将当前curRoot摘除，将curRoot的左孩子挂到curRoot当前的位置
-					if curRootParent == nil {
-						tree.root = B
-					} else {
-						//判断curRoot在左孩子
-						if curRootPosition == PositionLeft {
-							curRootParent.left = B
-						} else {
-							curRootParent.right = B
-						}
-					}
-					//setp2:将curRoot左孩子节点的右孩子挂到curRoot的左孩子，此时curRoot的left节点和curRoot脱钩
-					A.left = B.right
-					//setp3:将curRoot挂到，先前的left节点的右节点
-					B.right = A
-
-					//step3:调整各自的leftHeight和rightHeight
-					if A.left != nil {
-						A.leftHight = max(A.left.leftHight, A.left.righHight) + 1
-					} else {
-						A.leftHight = 0
-					}
-					B.righHight = max(B.right.leftHight, B.right.righHight) + 1
-					if curRootParent != nil {
-						if curRootPosition == PositionLeft {
-							curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
-						} else {
-							curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
-						}
-					}
-					return false
-				} else {
-					//LR
-					//    A
-					//  B
-					//    C
-					//setp1:将C节点挂到A的位置
-					A := curRoot
-					B := curRoot.left
-					C := curRoot.left.right
-					if curRootParent == nil {
-						//如果A节点是root节点
-						tree.root = C
-					} else {
-						//判断curRoot在左孩子
-						if curRootPosition == PositionLeft {
-							curRootParent.left = C
-						} else {
-							curRootParent.right = C
-						}
-					}
-					//step2:将C的左节点挂到B的右孩子
-					B.right = C.left
-					//setp3:将C的右节点挂到A的左孩子
-					A.left = C.right
-					//step4:将B节点作为C的左孩子
-					C.left = B
-					//step5:将A节点作为C的右孩子
-					C.right = A
-					//step6:调整相关节点的高度
-					//if B != nil {
-					if B.right != nil {
-						B.righHight = max(B.right.leftHight, B.right.righHight) + 1
-					} else {
-						B.righHight = 0
-					}
-					//}
-					//if A != nil {
-					if A.left != nil {
-						A.leftHight = max(A.left.leftHight, A.left.righHight) + 1
-					} else {
-						A.leftHight = 0
-					}
-					//}
-					C.leftHight = max(C.left.leftHight, C.left.righHight) + 1
-					C.righHight = max(C.right.leftHight, C.right.righHight) + 1
-					if curRootParent != nil {
-						if curRootPosition == PositionLeft {
-							curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
-						} else {
-							curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
-						}
-					}
-				}
-				return false
-			}
-
 		}
-		return isChange
 	}
+	tree.Shift(curRootParent, curRoot, curRootPosition)
+}
+func (tree *AVLTree) Shift(curRootParent *AVLNode, curRoot *AVLNode, curRootPosition int) bool {
+	if (curRoot.righHight - curRoot.leftHight) >= 2 {
+		if curRoot.right.righHight > curRoot.right.leftHight {
+			// A
+			//    B
+			//       C
+			A := curRoot
+			B := curRoot.right
+			//C := curRoot.right.right
+			//step1:将B节点作为中心节点，放到A的位置
+			if curRootParent == nil {
+				tree.root = B
+			} else {
+				if curRootPosition == PositionLeft {
+					curRootParent.left = B
+				} else {
+					curRootParent.right = B
+				}
+			}
+			//step2:将A的右孩子作为B的左孩子，B的左孩子作为A的右孩子
+			A.right = B.left
+			B.left = A
+			//step3:调整各自的leftHeight和rightHeight
+			if A.right != nil {
+				A.righHight = max(A.right.leftHight, A.right.righHight) + 1
+			} else {
+				A.righHight = 0
+			}
 
+			B.leftHight = max(B.left.leftHight, B.left.righHight) + 1
+			if curRootParent != nil {
+				if curRootPosition == PositionLeft {
+					curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
+				} else {
+					curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
+				}
+			}
+			return false
+		} else {
+			//RL
+			//  A
+			//     B
+			//  C
+			A := curRoot
+			B := curRoot.right
+			C := curRoot.right.left
+			//step1:将C放到A的位置
+			if curRootParent == nil {
+				tree.root = C
+			} else {
+				if curRootPosition == PositionLeft {
+					curRootParent.left = C
+				} else {
+					curRootParent.right = C
+				}
+			}
+			//step2:将A的right指向C的left
+			A.right = C.left
+			//step3:将B的left指向C的right
+			B.left = C.right
+			//step4:将A作为C的左孩子，B作为C的右孩子
+			C.left = A
+			C.right = B
+			//step5:调整相关节点的高度
+			if A.right != nil {
+				A.righHight = max(A.right.leftHight, A.right.righHight) + 1
+			} else {
+				A.righHight = 0
+			}
+			if B.left != nil {
+				B.leftHight = max(B.left.leftHight, B.left.righHight) + 1
+			} else {
+				B.leftHight = 0
+			}
+			C.leftHight = max(C.left.leftHight, C.left.righHight) + 1
+			C.righHight = max(C.right.leftHight, C.right.righHight) + 1
+			if curRootParent != nil {
+				if curRootPosition == PositionLeft {
+					curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
+				} else {
+					curRootParent.righHight = max(curRootParent.leftHight, curRootParent.righHight) + 1
+				}
+			}
+		}
+		return false
+	}
+	if (curRoot.leftHight - curRoot.righHight) >= 2 {
+
+		//curRoot.righHight += 1
+		//check and shift
+
+		if curRoot.left.leftHight > curRoot.left.righHight {
+			//LL
+			//      A
+			//    B
+			//  C
+			A := curRoot
+			B := curRoot.left
+			//	C:=curRoot.left.left
+
+			//setp1:将当前curRoot摘除，将curRoot的左孩子挂到curRoot当前的位置
+			if curRootParent == nil {
+				tree.root = B
+			} else {
+				//判断curRoot在左孩子
+				if curRootPosition == PositionLeft {
+					curRootParent.left = B
+				} else {
+					curRootParent.right = B
+				}
+			}
+			//setp2:将curRoot左孩子节点的右孩子挂到curRoot的左孩子，此时curRoot的left节点和curRoot脱钩
+			A.left = B.right
+			//setp3:将curRoot挂到，先前的left节点的右节点
+			B.right = A
+
+			//step3:调整各自的leftHeight和rightHeight
+			if A.left != nil {
+				A.leftHight = max(A.left.leftHight, A.left.righHight) + 1
+			} else {
+				A.leftHight = 0
+			}
+			B.righHight = max(B.right.leftHight, B.right.righHight) + 1
+			if curRootParent != nil {
+				if curRootPosition == PositionLeft {
+					curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
+				} else {
+					curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
+				}
+			}
+			return false
+		} else {
+			//LR
+			//    A
+			//  B
+			//    C
+			//setp1:将C节点挂到A的位置
+			A := curRoot
+			B := curRoot.left
+			C := curRoot.left.right
+			if curRootParent == nil {
+				//如果A节点是root节点
+				tree.root = C
+			} else {
+				//判断curRoot在左孩子
+				if curRootPosition == PositionLeft {
+					curRootParent.left = C
+				} else {
+					curRootParent.right = C
+				}
+			}
+			//step2:将C的左节点挂到B的右孩子
+			B.right = C.left
+			//setp3:将C的右节点挂到A的左孩子
+			A.left = C.right
+			//step4:将B节点作为C的左孩子
+			C.left = B
+			//step5:将A节点作为C的右孩子
+			C.right = A
+			//step6:调整相关节点的高度
+			//if B != nil {
+			if B.right != nil {
+				B.righHight = max(B.right.leftHight, B.right.righHight) + 1
+			} else {
+				B.righHight = 0
+			}
+			//}
+			//if A != nil {
+			if A.left != nil {
+				A.leftHight = max(A.left.leftHight, A.left.righHight) + 1
+			} else {
+				A.leftHight = 0
+			}
+			//}
+			C.leftHight = max(C.left.leftHight, C.left.righHight) + 1
+			C.righHight = max(C.right.leftHight, C.right.righHight) + 1
+			if curRootParent != nil {
+				if curRootPosition == PositionLeft {
+					curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight) + 1
+				} else {
+					curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight) + 1
+				}
+			}
+		}
+		return false
+	}
+	return false
 }
 func (tree *AVLTree) replaceRight(needReplaceNode *AVLNode, curRootParent *AVLNode, curRoot *AVLNode) bool {
 	if curRoot == nil {
@@ -283,9 +275,7 @@ func (tree *AVLTree) replaceRight(needReplaceNode *AVLNode, curRootParent *AVLNo
 
 	if curRoot.left != nil {
 		replaced := tree.replaceRight(needReplaceNode, curRoot, curRoot.left)
-		//if replaced {
-		//	curRootParent.righHight = max(curRootParent.right.leftHight, curRootParent.right.righHight)
-		//}
+		tree.Shift(curRootParent, curRoot, PositionLeft)
 		return replaced
 	} else {
 		needReplaceNode.data = curRoot.data
@@ -304,12 +294,9 @@ func (tree *AVLTree) replaceLeft(needReplaceNode *AVLNode, curRootParent *AVLNod
 	if curRoot == nil {
 		return false
 	}
-
 	if curRoot.right != nil {
 		replaced := tree.replaceLeft(needReplaceNode, curRoot, curRoot.right)
-		//if replaced {
-		//	curRootParent.leftHight = max(curRootParent.left.leftHight, curRootParent.left.righHight)
-		//}
+		tree.Shift(curRootParent, curRoot, PositionRight)
 		return replaced
 	} else {
 		needReplaceNode.data = curRoot.data
@@ -320,7 +307,6 @@ func (tree *AVLTree) replaceLeft(needReplaceNode *AVLNode, curRootParent *AVLNod
 			curRootParent.right = nil
 			curRootParent.righHight = 0
 		}
-
 		return true
 	}
 }
