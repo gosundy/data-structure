@@ -37,7 +37,7 @@ func (f *Funnel) Take() bool {
 	if f.current < 0 {
 		panic(fmt.Sprintf("funnel's current data count:%d less than 0", f.current))
 	}
-	if time.Now().Sub(f.lastTake).Microseconds()-f.leakRate.Microseconds() < 0 {
+	if time.Now().Sub(f.lastTake).Microseconds() < f.leakRate.Microseconds() {
 		return false
 	}
 	f.rwMutex.Lock()
